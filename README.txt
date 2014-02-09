@@ -15,3 +15,6 @@ Version 1.2:
 *Added option for health on text notification
 *Included a suggested addition to prevent freezing if the player is not fully loaded yet
 *Added option for displaying the name of the person in need on the marker
+
+Version 1.3:
+*Fixed the bug where markers were getting stuck (I believe)

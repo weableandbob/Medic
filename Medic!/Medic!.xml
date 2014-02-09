@@ -10,6 +10,11 @@ xsi:schemaLocation="http://www.red5studios.com/ ../../../schemas/component.xsd">
 		uiVersion="1000"
 	/>
 
+	<Textures>
+		<Texture name="healIcon" src="./Icons/healing_wave.png" premultiplied="false"/>
+		<Texture name="reviveIcon" src="./Icons/triage.png" premultiplied="false"/>
+	</Textures>
+
 	<Events>
 		<Event name="ON_COMPONENT_LOAD"						bind="OnComponentLoad"/>
 		<Event name="ON_FRIENDLY_DISTRESS"						bind="OnFriendlyDistress"/>

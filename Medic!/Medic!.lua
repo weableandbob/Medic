@@ -18,6 +18,9 @@ Version 1.2:
 *Added option for health on text notification
 *Included a suggested addition to prevent freezing if the player is not fully loaded yet
 *Added option for displaying the name of the person in need on the marker
+
+Version 1.3:
+*Fixed the bug where markers were getting stuck (I believe)
 --]]
 
 --Variables
@@ -111,8 +114,8 @@ function OnFriendlyDistress(args)
 			if tostring(args.need) == "health" then
 				if healEnabled then
 					if onlyHealOnBio == false or onlyHealOnBio == true and canHeal() then
-						marker = MapMarker.Create()
-						marker:BindToEntity(args.entityId, 0)
+						local marker = MapMarker.Create()
+						marker:BindToEntity(args.entityId, 100)
 						if markerName then
 							marker:SetTitle("Healing Needed - "..name)
 						else
@@ -127,14 +130,15 @@ function OnFriendlyDistress(args)
 						marker:ShowOnHud(true)
 						marker:ShowTrail(true)
 						marker:SetThemeColor(healColor)
+						--marker:GetIcon():SetTexture(healIcon)
 						callback(function() marker:Destroy() end, nil, healDuration)	
 					end
 				end
 			else
 				if reviveEnabled then
 					if onlyReviveOnBio == false or onlyReviveOnBio == true and isBio() then
-						marker = MapMarker.Create()
-						marker:BindToEntity(args.entityId, 1)
+						local marker = MapMarker.Create()
+						marker:BindToEntity(args.entityId, 100)
 						if markerName then
 							marker:SetTitle("Revive Needed - "..name)
 						else
@@ -165,6 +169,7 @@ function isBio()
 end
 
 function canHeal()
+	--This is used so that the addon doesn't freak out if the player has empty ability slots
 	if 1 <= #Player.GetAbilities().slotted then
 		a1 = Player.GetAbilities().slotted[1].abilityId
 	end
