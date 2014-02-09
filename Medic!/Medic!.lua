@@ -4,6 +4,7 @@ require "math"
 require "lib/lib_MapMarker"
 require "lib/lib_InterfaceOptions"
 require "lib/lib_Callback2"
+require "lib/lib_Slash"
 
 --[[
 Medic! Addon for Firefall by weableandbob - with additions by Legendinium
@@ -33,19 +34,23 @@ Version 1.4:
 *Added option for live status (HP% or time-till-respawn) on marker
 *Marker auto-destroys on next ping when no longer needed
 
-Known Issues:
+Version 1.5:
+*Added safeguard on self spawn that destroys any lingering Medic! markers
+*Added slash command '/medic clear' to manually clear all Medic! markers
+*Fixed a bug where Accord Bios would not pass the "canHeal()" test
+*Added tooltips to all the options under 'Esc->Options->Addons->Medic!' and changed healthy threshold to % for clarity
 
-*Marker can lose track of distressed target in certain situations. 
-	Seems to be correlated with high density areas such as Copa, and should not affect normal play.
+Known Issues:
+* With the latest milestone patch, the FireFall core has adopted some basic features from the Medic! addon. It will now create markers of its own on player distress, though without pings, health/respawn info or indeed any user configurability.
+(Health marker created only if distressed player has less than 50% HP, lasts 6 seconds, 1 initial ping only. Revive marker lasts 30 seconds, 1 initial ping only)
+Medic! plays nice with this new core feature so long as the "Add Name To Marker" option is enabled. The next release of Medic! will integrate, extend or disable this part of the FireFall's functionality.
 
 ToDo:
-
-*implement ping extensions
-*cleanup & add desc to menu items
-*workaround to "falling off" bug if it turns out to be an issue: @ callback : if marker pos ~= caller pos, destroy & recreate minus spent ticks <- don't like the overhead
-*color-by-severity-of-distress mode?
-*implement "responsive mode" (faster update on life/time callbacks)
-*implement marker texture/color change on revive
++Integrate with FireFall Core SOS functionality.
+*Implement ping extensions
+*Consider Color-by-severity-of-distress mode
+*Implement "responsive mode" (faster update on life/time callbacks)
+*Implement marker texture/color change on revive
 
 --]]
 
@@ -157,32 +162,155 @@ local g_MMarkerIdPrefix = "Medic_"
 
 --INTERFACE OPTIONS
 
-InterfaceOptions.StartGroup({id="ENABLED", label="Medic!", checkbox=true, default=g_MEnabled})
-	InterfaceOptions.AddSlider({id="MaxDistance", label="Max Distance", tooltip="Adjusts the maximum distance someone can be from you and still provide a notification",default=g_MMaxDistance, min=10, max=170, inc=5, suffix="m"})
-	InterfaceOptions.AddCheckBox({id="friendsOnly", label="Enable Alert From Friends Only", tooltip="When enabled, ensures that only people in your friends list or squad will trigger the addon", default=g_MFriendsOnly})
-	InterfaceOptions.AddSlider({id="healthyThreshold", label="Healthy Threshold", default=g_MHealthyThreshold, min=0.01, max=0.99, inc=0.01})
-	InterfaceOptions.AddCheckBox({id="TextNotificationEnabled", label="Enable Text Notification", tooltip="When enabled, displays the person in need and what they need in chat.", default=g_MTextNotification})
-	InterfaceOptions.AddCheckBox({id="TextNotificationHealth", label="Display Health In Text Notifications", tooltip="When enabled, health and percent health are displayed with the text notification", default=g_MTextHealth})
+InterfaceOptions.StartGroup({
+	id="ENABLED", 
+	label="Medic!", 
+	checkbox=true, 
+	default=g_MEnabled
+})
+	InterfaceOptions.AddSlider({
+		id="MaxDistance", 
+		label="Max Distance", 
+		tooltip="Adjusts the maximum distance someone can be from you and still provide a notification",
+		default=g_MMaxDistance, 
+		min=10, 
+		max=170, 
+		inc=5, 
+		suffix="m"
+	})
+	InterfaceOptions.AddCheckBox({
+		id="friendsOnly", 
+		label="Enable Alert From Friends Only", 
+		tooltip="When enabled, ensures that only people in your friends list or squad will trigger the addon", 
+		default=g_MFriendsOnly
+	})
+	InterfaceOptions.AddSlider({
+		id="healthyThreshold", 
+		label="Healthy Threshold %",
+		tooltip="The threshold between 0 and 99% HP above which a player is considered healthy, and the addon is not triggered. Used to lower the amount of 'false positives' from players near full HP (mis)triggering a distress call", 
+		default=(g_MHealthyThreshold*100), 
+		min=1, 
+		max=99, 
+		inc=1
+	})
+	InterfaceOptions.AddCheckBox({
+		id="TextNotificationEnabled", 
+		label="Enable Text Notification", 
+		tooltip="When enabled, displays the person in need and what they need in chat.", 
+		default=g_MTextNotification
+	})
+	InterfaceOptions.AddCheckBox({
+		id="TextNotificationHealth", 
+		label="Display Health In Text Notifications", 
+		tooltip="When enabled, distressed player's health is displayed in the text notification", 
+		default=g_MTextHealth
+	})
 InterfaceOptions.StopGroup()
-InterfaceOptions.StartGroup({id="healEnabled", label="Enable Heal Marker", tooltip="Determines whether a marker is displayed when someone calls for healing.", checkbox=g_MHealEnabled, default=true})
-	InterfaceOptions.AddCheckBox({id="BioOnlyHeal", label="Notify For Heal Only When Possible", tooltip="When checked, makes it so that you only get heal notifications when you have something capable of healing them with", default=g_MOnlyHealOnBio})
+InterfaceOptions.StartGroup({
+	id="healEnabled", 
+	label="Enable Heal Marker", 
+	tooltip="Determines whether a marker is displayed when someone calls for healing.", 
+	checkbox=g_MHealEnabled, 
+	default=true
+})
+	InterfaceOptions.AddCheckBox({
+		id="BioOnlyHeal", 
+		label="Notify For Heal Only When Possible", 
+		tooltip="When checked, makes it so that you only get heal notifications when you have something capable of healing with.", 
+		default=g_MOnlyHealOnBio
+	})
 InterfaceOptions.StopGroup()
-InterfaceOptions.StartGroup({id="reviveEnabled", label="Enable Revive Marker", tooltip="Determines whether a marker is displayed when someone calls for a revive.", checkbox=true, default=g_MReviveEnabled})
-	InterfaceOptions.AddCheckBox({id="BioOnlyRevive", label="Notify For Revive Only On Biotech", tooltip="When checked, makes it so that you only get revive notifications when you're playing Biotech", default=g_MOnlyReviveOnBio})
+InterfaceOptions.StartGroup({
+	id="reviveEnabled", 
+	label="Enable Revive Marker", 
+	tooltip="Determines whether a marker is displayed when someone calls for a revive.", 
+	checkbox=true, 
+	default=g_MReviveEnabled
+})
+	InterfaceOptions.AddCheckBox({
+		id="BioOnlyRevive", 
+		label="Notify For Revive Only On Biotech", 
+		tooltip="When checked, makes it so that you only get revive notifications when you're playing Biotech", 
+		default=g_MOnlyReviveOnBio
+		})
 InterfaceOptions.StopGroup()
 
-InterfaceOptions.StartGroup({label="Marker customizations", subtab={"Marker"}})
-	InterfaceOptions.AddCheckBox({id="AddNameToMarker", label="Add Name To Marker", tooltip="When checked, makes the person in need's name appear on the marker", default=g_MNameOnMarker, subtab={"Marker"}})
-	InterfaceOptions.AddCheckBox({id="AddStatusToMarker", label="Add Status To Marker", tooltip="When checked, makes the person in need's HP or time-to-respawn appear on the marker", default=g_MStatusOnMarker, subtab={"Marker"}})
-	InterfaceOptions.AddSlider({id="PINGS", label="Max Pings", default=g_MPings, min=1, max=30, inc=1, subtab={"Marker"}})
-	InterfaceOptions.AddSlider({id="PING_INTERVAL", label="Interval Between Pings", default=g_MPingInterval, min=0.4, max=10, inc=0.2, suffix="s", subtab={"Marker"}})
-	InterfaceOptions.AddColorPicker({id="healColor", label="Marker Color For Healing", default={tint=g_MHealColor}, subtab={"Marker"}})
-	InterfaceOptions.AddColorPicker({id="reviveColor", label="Marker Color For Revive", default={tint=g_MReviveColor}, subtab={"Marker"}})
+InterfaceOptions.StartGroup({
+	label="Marker customizations", 
+	subtab={"Marker"}
+})
+	InterfaceOptions.AddCheckBox({
+		id="AddNameToMarker", 
+		label="Add Name To Marker", 
+		tooltip="When checked, makes the person in need's name appear on the marker", 
+		default=g_MNameOnMarker, 
+		subtab={"Marker"}
+	})
+	InterfaceOptions.AddCheckBox({
+		id="AddStatusToMarker", 
+		label="Add Status To Marker", 
+		tooltip="When checked, makes the person in need's HP or time-to-respawn appear on the marker", 
+		default=g_MStatusOnMarker, 
+		subtab={"Marker"}
+	})
+	InterfaceOptions.AddSlider({
+		id="PINGS", 
+		label="Max Pings", 
+		tooltip="How many pings will fire before the marker expires. MaxPings*PingInterval == marker duration in seconds",
+		default=g_MPings,
+		min=1, 
+		max=30, 
+		inc=1, 
+		subtab={"Marker"}
+	})
+	InterfaceOptions.AddSlider({
+		id="PING_INTERVAL", 
+		label="Interval Between Pings", 
+		default=g_MPingInterval, 
+		min=0.4, 
+		max=10, 
+		inc=0.2, 
+		suffix="s", 
+		subtab={"Marker"}
+	})
+	InterfaceOptions.AddColorPicker({
+		id="healColor", 
+		label="Marker Color For Healing", 
+		tooltip="Color to use for heal markers (trail and icon)",
+		default={tint=g_MHealColor}, 
+		subtab={"Marker"}
+	})
+	InterfaceOptions.AddColorPicker({
+		id="reviveColor", 
+		label="Marker Color For Revive", 
+		tooltip="Color to use for revive markers (trail and icon)",
+		default={tint=g_MReviveColor}, 
+		subtab={"Marker"}
+	})
 InterfaceOptions.StopGroup({subtab="Marker"})
 
-InterfaceOptions.StartGroup({id="playSound", label="Enable Audio", checkbox=true, default=g_MPlaySound, subtab={"Sound"}})
-	InterfaceOptions.AddChoiceMenu({id="healSound", label="Heal Audio Clip", default=g_MHealSound, subtab={"Sound"}});
-	InterfaceOptions.AddChoiceMenu({id="reviveSound", label="Revive Audio Clip", default=g_MReviveSound, subtab={"Sound"}});
+InterfaceOptions.StartGroup({
+	id="playSound", 
+	label="Enable Audio", 
+	tooltip="Makes a sound play on each marker ping",
+	checkbox=true,
+	default=g_MPlaySound, 
+	subtab={"Sound"}
+})
+	InterfaceOptions.AddChoiceMenu({
+		id="healSound", 
+		label="Heal Audio Clip",
+		tooltip="Sound clip to use for heal marker pings",
+		default=g_MHealSound, 
+		subtab={"Sound"}
+	});
+	InterfaceOptions.AddChoiceMenu({
+		id="reviveSound", 
+		label="Revive Audio Clip", 
+		tooltip="Sound clip to use for revive marker pings",
+		default=g_MReviveSound, 
+		subtab={"Sound"}
+	});
 InterfaceOptions.StopGroup({subtab="Sound"})
 
 InterfaceOptions.NotifyOnLoaded(true)
@@ -199,7 +327,7 @@ function OnOptionCallback(args)
 	elseif id == "friendsOnly" then
 		g_MFriendsOnly = val
 	elseif id == "healthyThreshold" then
-		g_MHealthyThreshold = val
+		g_MHealthyThreshold = (val/100)
 	elseif id == "TextNotificationEnabled" then
 		g_MTextNotification = val
 	elseif id == "TextNotificationHealth" then
@@ -260,6 +388,19 @@ function OnComponentLoad()
 		g_MFriends[cleanName] = true
 	end
 
+	--Set Up slash command
+	local chat_commands = {
+		["help"] = function(args) Component.GenerateEvent('MY_SYSTEM_MESSAGE', {text="Medic! commands. Try '/medic clear' to clear markers."}) end,
+		["clear"] = function(args) clearMarkers() end,
+	}
+	LIB_SLASH.BindCallback({
+		slash_list="medic",
+		description="Medic! commands.",
+		func=function(args)
+			local command = args.text ~= "" and args.text or "help"
+			chat_commands[command](args)
+		end
+		})
 end
 
 
@@ -334,8 +475,21 @@ function OnFriendlyDistress(args)
 
 end
 
+function OnSpawn()
+	clearMarkers()
+end
+
 
 --HELPERS
+
+function clearMarkers()
+	if next(g_MMarkers) ~= nil then
+		for id,marker in pairs(g_MMarkers) do
+			g_MMarkers[id] = nil
+			marker:Destroy()
+		end 
+	end
+end
 
 function getName(caller)
 	return Game.GetTargetInfo(caller.entityId).name
@@ -371,7 +525,7 @@ function createDistressMarker(caller)
 	if g_MStatusOnMarker then
 		local markerTitleUpdater;
 		markerTitleUpdater = Callback2.CreateCycle(function()
-			if g_MMarkers[markerId] == false then
+			if not g_MMarkers[markerId] then
 				callback(function() markerTitleUpdater:Release() end, nil, 0.01) --A bit hack-ish, but CB2 has a tail-wrapper to the callbacks it's executing that needs the reference we are destroying with :Release() - see lib_Callback2.lua, line 270-3
 				return false
 			end
@@ -416,11 +570,16 @@ function setMarkerPings(caller, marker)
 	local PING;
 	PING = Callback2.CreateCycle(
 		function()
-			if Game.IsTargetAvailable(caller.entityId) == false or isHealthy(caller) or pingCount == g_MPings then --First conditional: The caller is no longer in range - the marker has probably lost track
-					g_MMarkers[marker:GetId()] = false
+			if next(marker) == nil then
+				callback(function() PING:Release() end, nil, 0.01) --TODO: Refactor
+				return
+			end
+			if not Game.IsTargetAvailable(caller.entityId) or isHealthy(caller) or pingCount == g_MPings then --First conditional: The caller is no longer in range - the marker has probably lost track
+					g_MMarkers[marker:GetId()] = nil
 					marker:Destroy()
 					callback(function() PING:Release() end, nil, 0.01) 
 			else
+				marker:BindToEntity(marker:GetBoundEntity(), 100) --Rebind to entity as workaround for markers "falling off" bug
 				marker:Ping()
 				pingCount = pingCount + 1
 			end
@@ -466,47 +625,26 @@ function isBio()
 	end
 end
 
-function canHeal() --TODO: refactor
-	if 1 <= #Player.GetAbilities().slotted then
-		a1 = Player.GetAbilities().slotted[1].abilityId
-	end
-	if 2 <= #Player.GetAbilities().slotted then
-		a2 = Player.GetAbilities().slotted[2].abilityId
-	end
-	if 3 <= #Player.GetAbilities().slotted then
-		a3 = Player.GetAbilities().slotted[3].abilityId
-	end
-	if 4 <= #Player.GetAbilities().slotted then
-		a4 = Player.GetAbilities().slotted[4].abilityId
-	end
-	weapon = Player.GetWeaponInfo()
-	
+function canHeal()
+	local weapon = Player.GetWeaponInfo()
 	if weapon and weapon.WeaponType == "BioRifle" then
 		return true
-	elseif a1 == 35040 or a1 == 34832 or a1 == 31366 or a1 == 34928 or a1 == 35565 then
-		return true
-	elseif a2 == 35040 or a2 == 34832 or a2 == 31366 or a2 == 34928 or a2 == 35565 then
-		return true
-	elseif a3 == 35040 or a3 == 34832 or a3 == 31366 or a3 == 34928 or a3 == 35565 then
-		return true
-	elseif a4 == 35040 or a4 == 34832 or a4 == 31366 or a4 == 34928 or a4 == 35565 then
-		return true
-	else
-		--log("a1: "..tostring(a1))
-		--log("a2: "..tostring(a2))
-		--log("a3: "..tostring(a3))
-		--log("a4: "..tostring(a4))
-		return false
 	end
+
+	local healingAbilities = { --TODO: add healing generator
+		["35040"] = "Healing Pillar",
+		["34832"] = "Healing Ball",
+		["31366"] = "Healing Wave",
+		["34928"] = "Healing Dome",
+		["35565"] = "Accord Chemical Sprayer",
+	}
+
+	for i,ability in pairs(Player.GetAbilities().slotted) do
+		if healingAbilities[tostring(ability.abilityId)] then
+			return true
+		end
+	end
+
+	log("canHeal() returns false")
+	return false
 end
-
-
---[[
-Healing Ability and Weapon IDs
-BioRifle: BioRifle
-Healing Pillar: 35040
-Healing Ball: 34832
-Healing Wave: 31366
-Healing Dome: 34928
-Accord Chemical Sprayer: 35565
---]]

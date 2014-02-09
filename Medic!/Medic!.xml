@@ -11,7 +11,8 @@ xsi:schemaLocation="http://www.red5studios.com/ ../../../schemas/component.xsd">
 	/>
 
 	<Events>
-		<Event name="ON_COMPONENT_LOAD"						bind="OnComponentLoad"/>
-		<Event name="ON_FRIENDLY_DISTRESS"						bind="OnFriendlyDistress"/>
+		<Event name="ON_COMPONENT_LOAD"		bind="OnComponentLoad"/>
+		<Event name="ON_FRIENDLY_DISTRESS"	bind="OnFriendlyDistress"/>
+		<Event name="ON_SPAWN"				bind="OnSpawn"/>
 	</Events>
 </Component>
