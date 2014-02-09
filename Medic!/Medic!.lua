@@ -4,6 +4,22 @@ require "math"
 require "lib/lib_MapMarker"
 require "lib/lib_InterfaceOptions"
 
+--[[
+Medic! Addon for Firefall by weableandbob
+
+Version History:
+
+Version 1:
+Initial Release
+
+Version 1.2:
+*Fixed some really terrible grammar
+*Moved enable button
+*Added option for health on text notification
+*Included a suggested addition to prevent freezing if the player is not fully loaded yet
+*Added option for displaying the name of the person in need on the marker
+--]]
+
 --Variables
 
 addonEnabled = true
@@ -13,24 +29,26 @@ healEnabled = true
 reviveEnabled = true
 onlyHealOnBio = true
 onlyReviveOnBio = false
+markerName = true
 textNotification = true
+textHealth = true
 maxDistance = 100
 healColor = {alpha=1, tint="33CC00"}
 reviveColor = {alpha=1, tint="CC0022"}
 
 --Interface Stuff
 
-InterfaceOptions.StartGroup({id="EnabledOption", label="Enable?"})
-InterfaceOptions.AddCheckBox({id="Enabled", label="Enable Addon", default=true})
-InterfaceOptions.StopGroup()
 InterfaceOptions.StartGroup({id="Options", label="Addon Options"})
+InterfaceOptions.AddCheckBox({id="Enabled", label="Enable Addon", default=true})
 InterfaceOptions.AddSlider({id="HealDuration", label="Duration of Heal Marker", default=10, min=1, max=30, inc=1, suffix="s"})
 InterfaceOptions.AddSlider({id="ReviveDuration", label="Duration of Revive Marker", default=10, min=1, max=30, inc=1, suffix="s"})
 InterfaceOptions.AddCheckBox({id="HealEnabled", label="Enable Heal Marker", tooltip="Determines whether a marker is displayed when someone calls for healing.", default=true})
-InterfaceOptions.AddCheckBox({id="BioOnlyHeal", label="Biotech Only Heal Notify", tooltip="When checked, makes it so that you only get heal notifications when you have something capable of healing them with", default=true})
+InterfaceOptions.AddCheckBox({id="BioOnlyHeal", label="Notify For Heal Only When Possible", tooltip="When checked, makes it so that you only get heal notifications when you have something capable of healing them with", default=true})
 InterfaceOptions.AddCheckBox({id="ReviveEnabled", label="Enable Revive Marker", tooltip="Determines whether a marker is displayed when someone calls for a revive.", default=true})
-InterfaceOptions.AddCheckBox({id="BioOnlyRevive", label="Biotech Only Revive Notify", tooltip="When checked, makes it so that you only get revive notifications when you're playing Biotech", default=false})
+InterfaceOptions.AddCheckBox({id="BioOnlyRevive", label="Notify For Revive Only On Biotech", tooltip="When checked, makes it so that you only get revive notifications when you're playing Biotech", default=false})
+InterfaceOptions.AddCheckBox({id="AddNameToMarker", label="Add Name To Marker", tooltip="When checked, makes the person in need's name appear on the marker", default=true})
 InterfaceOptions.AddCheckBox({id="TextNotificationEnabled", label="Enable Text Notification", tooltip="When enabled, displays the person in need and what they need in chat.", default=true})
+InterfaceOptions.AddCheckBox({id="TextNotificationHealth", label="Display Health In Text Notifications", tooltip="When enabled, health and percent health are displayed with the text notification", default=true})
 InterfaceOptions.AddSlider({id="MaxDistance", label="Max Distance", tooltip="Adjusts the maximum distance someone can be from you and still provide a notification",default=100, min=10, max=250, inc=5, suffix="m"})
 InterfaceOptions.StopGroup()
 
@@ -40,17 +58,16 @@ function OnComponentLoad()
 	end, "Medic!");
 end
 
+--Options
+
 function OnOptionCallback(args)
-	log(tostring(canHeal()))
 	local id = args.type
 	local val = args.data
 	if id == "Enabled" then
 		addonEnabled = val
-		log(tostring(addonEnabled))
 	end
 	if id == "HealDuration" then
 		healDuration = val
-		log(tostring(healDuration))
 	end
 	if id == "ReviveDuration" then
 		reviveDuration = val
@@ -64,6 +81,9 @@ function OnOptionCallback(args)
 	if id == "TextNotificationEnabled" then
 		textNotification = val
 	end
+	if id == "TextNotificationHealth" then
+		textHealth = val
+	end
 	if id == "MaxDistance" then
 		maxDistance = val
 	end
@@ -73,6 +93,9 @@ function OnOptionCallback(args)
 	if id == "BioOnlyRevive" then
 		onlyReviveOnBio = val
 	end
+	if id == "AddNameToMarker" then
+		markerName = val
+	end
 end
 
 --Logic
@@ -81,7 +104,7 @@ function OnFriendlyDistress(args)
 	--args.need = "health" or something else
 	--args.entityId = number
 	--args.distance	
-	if addonEnabled then
+	if addonEnabled and Player.IsReady() then
 		name = Game.GetTargetInfo(args.entityId).name
 		distance = args.distance
 		if distance <= maxDistance then
@@ -89,10 +112,17 @@ function OnFriendlyDistress(args)
 				if healEnabled then
 					if onlyHealOnBio == false or onlyHealOnBio == true and canHeal() then
 						marker = MapMarker.Create()
-						marker:BindToEntity(args.entityId, 100)
-						marker:SetTitle("Healing Needed")
+						marker:BindToEntity(args.entityId, 0)
+						if markerName then
+							marker:SetTitle("Healing Needed - "..name)
+						else
+							marker:SetTitle("Healing Needed")
+						end
 						if textNotification then
 							Component.GenerateEvent("MY_SYSTEM_MESSAGE", {text=tostring(name).." needs healing!"})
+							if textHealth then
+								Component.GenerateEvent("MY_SYSTEM_MESSAGE", {text=Game.GetTargetVitals(args.entityId).Health.." health"})
+							end
 						end
 						marker:ShowOnHud(true)
 						marker:ShowTrail(true)
@@ -104,8 +134,12 @@ function OnFriendlyDistress(args)
 				if reviveEnabled then
 					if onlyReviveOnBio == false or onlyReviveOnBio == true and isBio() then
 						marker = MapMarker.Create()
-						marker:BindToEntity(args.entityId, 100)
-						marker:SetTitle("Revive Needed")
+						marker:BindToEntity(args.entityId, 1)
+						if markerName then
+							marker:SetTitle("Revive Needed - "..name)
+						else
+							marker:SetTitle("Revive Needed")
+						end
 						if textNotification then
 							Component.GenerateEvent("MY_SYSTEM_MESSAGE", {text=tostring(name).." needs a revive!"})
 						end
