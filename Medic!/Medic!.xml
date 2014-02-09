@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Component xmlns="http://www.red5studios.com/"
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+xsi:schemaLocation="http://www.red5studios.com/ ../../../schemas/component.xsd">
+	<Info
+		title="Oh Dear, I'm Dying!"
+		author="Asgard"
+		description="Warns your closest friends and relatives when your health/ammo drops below a certain user-defined percentage."
+		url=""
+		uiVersion="1000"
+	/>
+
+	<Events>
+		<Event name="ON_COMPONENT_LOAD"						bind="OnComponentLoad"/>
+		<Event name="ON_FRIENDLY_DISTRESS"						bind="OnFriendlyDistress"/>
+	</Events>
+</Component>
