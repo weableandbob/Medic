@@ -18,3 +18,14 @@ Version 1.2:
 
 Version 1.3:
 *Fixed the bug where markers were getting stuck (I believe)
+
+Version 1.4
+*Coded by Legendinium
+*Added icons to the markers
+*Added Marker/trail/icon colors
+*Added Marker "ping" count and interval
+*Added Audio alert on initial marker ping
+*Added Activation and marker destroy threshold based on caller's health
+*Added friends only mode
+*Added option for live status (HP% or time-till-respawn) on marker
+*Marker auto-destroys on next ping when no longer needed

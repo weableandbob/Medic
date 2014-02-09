@@ -3,17 +3,12 @@
 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 xsi:schemaLocation="http://www.red5studios.com/ ../../../schemas/component.xsd">
 	<Info
-		title="Oh Dear, I'm Dying!"
-		author="Asgard"
-		description="Warns your closest friends and relatives when your health/ammo drops below a certain user-defined percentage."
+		title="Medic!"
+		author=""
+		description=""
 		url=""
 		uiVersion="1000"
 	/>
-
-	<Textures>
-		<Texture name="healIcon" src="./Icons/healing_wave.png" premultiplied="false"/>
-		<Texture name="reviveIcon" src="./Icons/triage.png" premultiplied="false"/>
-	</Textures>
 
 	<Events>
 		<Event name="ON_COMPONENT_LOAD"						bind="OnComponentLoad"/>
